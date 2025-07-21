@@ -1,0 +1,19 @@
+2025/07/12-10:07:24.029 bad81 Reusing MANIFEST /Users/robintsang/Downloads/TeenFuture/JavaCode/springDemo/user-data/firefox/Default/Local Storage/leveldb/MANIFEST-000001
+2025/07/12-10:07:24.035 bad81 Recovering log #51
+2025/07/12-10:07:24.036 bad81 Level-0 table #53: started
+2025/07/12-10:07:24.044 bad81 Level-0 table #53: 20288 bytes OK
+2025/07/12-10:07:24.045 bad81 Recovering log #52
+2025/07/12-10:07:24.048 bad81 Level-0 table #54: started
+2025/07/12-10:07:24.054 bad81 Level-0 table #54: 22403 bytes OK
+2025/07/12-10:07:24.066 bad81 Delete type=0 #51
+2025/07/12-10:07:24.066 bad81 Delete type=0 #52
+2025/07/12-10:07:24.068 bad83 Compacting 5@0 + 1@1 files
+2025/07/12-10:07:24.084 bad83 Generated table #56@0: 63 keys, 23561 bytes
+2025/07/12-10:07:24.084 bad83 Compacted 5@0 + 1@1 files => 23561 bytes
+2025/07/12-10:07:24.102 bad83 compacted to: files[ 0 1 1 0 0 0 0 ]
+2025/07/12-10:07:24.103 bad83 Delete type=2 #42
+2025/07/12-10:07:24.103 bad83 Delete type=2 #54
+2025/07/12-10:07:24.103 bad83 Delete type=2 #50
+2025/07/12-10:07:24.103 bad83 Delete type=2 #44
+2025/07/12-10:07:24.104 bad83 Delete type=2 #47
+2025/07/12-10:07:24.104 bad83 Delete type=2 #53
