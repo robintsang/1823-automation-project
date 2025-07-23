@@ -1,0 +1,9 @@
+{
+  "name": "Suki",
+  "email": "suki@example.com",
+  "phone": "87654321",
+  "category": "Service Complaint",
+  "subject": "Enquiry about service hours",
+  "description": "I would like to know the service hours for the 1823 hotline.",
+  "attachment": null
+} 
