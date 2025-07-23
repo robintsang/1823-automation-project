@@ -1,29 +1,22 @@
-package hk1823.automation.Utility.playwright;
+package hk1823.automation.Utility.robin.playwright;
 
 import com.microsoft.playwright.*;
 import org.junit.jupiter.api.*;
 import java.nio.file.Paths;
-import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ComplaintPlaywrightJsonTest {
+public class ComplaintPlaywrightAutoUploadTest {
     static Playwright playwright;
     static Browser browser;
     BrowserContext context;
     Page page;
-    static JsonNode complaintData;
 
     @BeforeAll
-    static void setupAll() throws Exception {
+    static void setupAll() {
         playwright = Playwright.create();
         browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
-        // Load JSON data
-        ObjectMapper mapper = new ObjectMapper();
-        complaintData = mapper.readTree(Files.readAllBytes(Paths.get("complaints/complaint_robin.json")));
     }
 
     @AfterAll
@@ -44,7 +37,7 @@ public class ComplaintPlaywrightJsonTest {
     }
 
     @Test
-    public void testOtherCategoryComplaintJson() throws InterruptedException {
+    public void testOtherCategoryComplaintAutoUpload() throws InterruptedException {
         // ================== Section A: Open website and enter complaint form ==================
         // Step 1: Open the homepage
         page.navigate("https://www.1823.gov.hk/en/");
@@ -63,13 +56,22 @@ public class ComplaintPlaywrightJsonTest {
 
         // Step 5: Detect page language by the main title and set the case information text accordingly
         String titleText = page.textContent("xpath=//span[@class='form-name__lg']").trim();
-        String caseInfoText = complaintData.has("description") ? complaintData.get("description").asText() : "";
+        String caseInfoText;
+        if (titleText.contains("要求服務/投訴")) {
+            caseInfoText = "最近家對面馬路等燈處經常因大雨水浸，渠口堵塞，積水不散。此情況已持續多個月。請盡快安排清理。可提供現場照片及影片。";
+        } else if (titleText.contains("Request for Service/Complaint")) {
+            caseInfoText = "The road near my home is often flooded after heavy rain. The drains are blocked and the water does not drain. This has been happening for several months. Please arrange for urgent clearance. Photos and videos are available upon request.";
+        } else if (titleText.contains("要求服务/投诉")) {
+            caseInfoText = "最近家对面马路等灯处经常因大雨水浸，渠口堵塞，积水不散。此情况已持续多个月。请尽快安排清理。可提供现场照片及视频。";
+        } else {
+            caseInfoText = "The road near my home is often flooded after heavy rain. The drains are blocked and the water does not drain. This has been happening for several months. Please arrange for urgent clearance. Photos and videos are available upon request.";
+        }
 
         // Step 6: Fill in the case information
         page.fill("xpath=//textarea[@id='個案資料' or @id='个案资料' or @id='Case Information']", caseInfoText);
 
         // Step 7: Fill in the case location
-        String caseLocation = complaintData.has("location") ? complaintData.get("location").asText() : "FU YIP STREET and HUNG LOK STREET junction";
+        String caseLocation = "FU YIP STREET and HUNG LOK STREET junction";
         page.fill("xpath=//input[@id='suggest' or @placeholder='輸入地點' or @placeholder='Enter location' or @placeholder='输入地点']", caseLocation);
         page.waitForSelector("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
         page.click("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
@@ -80,6 +82,7 @@ public class ComplaintPlaywrightJsonTest {
         String videoPath = System.getProperty("user.dir") + "/test_uploads/fu_yip_street_flood_video.mp4";
         page.setInputFiles("xpath=//input[contains(@id,'fileupload') and @type='file']",
             new java.nio.file.Path[] { Paths.get(filePath), Paths.get(videoPath) });
+        // Optionally, wait a bit for upload to process
         page.waitForTimeout(2000);
 
         // Step 9: Click the 'Next' button to proceed to the next page
@@ -91,9 +94,9 @@ public class ComplaintPlaywrightJsonTest {
         // Step 11: Agree to disclose personal data (multi-language)
         page.click("xpath=//label[@for='agree_1']//span[contains(text(),'同意') or contains(text(),'Yes')]");
         // Step 12: Fill in Name, Email, Phone
-        page.fill("xpath=//input[@id='name']", complaintData.has("name") ? complaintData.get("name").asText() : "Robin");
-        page.fill("xpath=//input[@id='email']", complaintData.has("email") ? complaintData.get("email").asText() : "robintesting@gmail.com");
-        page.fill("xpath=//input[@id='phone']", complaintData.has("phone") ? complaintData.get("phone").asText() : "66886868");
+        page.fill("xpath=//input[@id='name']", "Robin");
+        page.fill("xpath=//input[@id='email']", "robintesting@gmail.com");
+        page.fill("xpath=//input[@id='phone']", "66886868");
         // Step 13: Select best time to call (multi-language)
         page.click("xpath=//span[contains(text(),'約下午6:00 - 晚上10:00') or contains(text(),'approximately 6:00 PM - 10:00 PM') or contains(text(),'约下午6:00 - 晚上10:00')]");
         // Step 14: Department needs to provide a reply (multi-language)
@@ -103,16 +106,18 @@ public class ComplaintPlaywrightJsonTest {
         page.click("xpath=//button[normalize-space()='Next' or contains(text(),'下一步')]");
 
         // ================== Section E: Confirmation page assertions (no upload file checks) ==================
+        // Prepare expected values for batch assertion
         Map<String, String> expectedInfo = new HashMap<>();
         expectedInfo.put("Subject of Service Request/Complaint", "Other Complaints");
         expectedInfo.put("Have you submitted a case to 1823 regarding the same topic?", "No");
         expectedInfo.put("Case Information", caseInfoText);
         expectedInfo.put("Case Location", caseLocation);
-        expectedInfo.put("Name", complaintData.has("name") ? complaintData.get("name").asText() : "Robin");
-        expectedInfo.put("Email", complaintData.has("email") ? complaintData.get("email").asText() : "robintesting@gmail.com");
-        expectedInfo.put("Phone", complaintData.has("phone") ? complaintData.get("phone").asText() : "66886868");
+        expectedInfo.put("Name", "Robin");
+        expectedInfo.put("Email", "robintesting@gmail.com");
+        expectedInfo.put("Phone", "66886868");
         // Add more fields as needed
 
+        // Find all info__item blocks on the confirmation page
         int infoItemCount = page.locator("xpath=//div[@class='info__item']").count();
         for (int i = 0; i < infoItemCount; i++) {
             Locator item = page.locator("xpath=//div[@class='info__item']").nth(i);
@@ -120,6 +125,7 @@ public class ComplaintPlaywrightJsonTest {
             String content = "";
             try {
                 title = item.locator("xpath=.//p[@class='info__title']").textContent().trim();
+                // Special handling for Case Location
                 if (title.equals("Case Location")) {
                     content = item.locator("xpath=.//p[@class='map-row__address']").textContent().trim();
                     assertEquals("FU YIP STREET", content, "Case Location should match the system's selected address");
@@ -131,12 +137,17 @@ public class ComplaintPlaywrightJsonTest {
                         content = contentLocator.first().textContent().trim();
                     }
                 }
+                // Do not check Photo/File Upload or file names
                 if (expectedInfo.containsKey(title) && !title.equals("Photo/File Upload")) {
                     assertEquals(expectedInfo.get(title), content, title + " should match");
                 }
             } catch (Exception e) {
+                // Skip if title or content not found
             }
         }
+
+        // ================== Section F: Finish ==================
+        // Step 26: Wait a few seconds to observe the result
         page.waitForTimeout(10000);
     }
 } 

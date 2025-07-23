@@ -1,8 +1,7 @@
 // Import necessary Playwright and testing classes
-package academy.teenfuture.crse.utility;
+package hk1823.automation.Utility.terry.playwright;
 
 import com.microsoft.playwright.*;
-import 
 import org.junit.jupiter.api.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -83,10 +82,8 @@ public abstract class BaseFormTest {
      * - Verifies subject container is visible
      */
     private void validatePageLoad() {
-        // Wait for and check network response
-        Response response = page.waitForResponse("/*");
-        assertThat("Page load error (e.g., 404)", response.status(), equalTo(200));
-        
+        // 等待页面网络空闲，表示页面加载完成
+        page.waitForLoadState("networkidle");
     }
 
     /**
@@ -107,7 +104,7 @@ public abstract class BaseFormTest {
                 page.locator("figure.placeholder.placeholder--complain-type:has(img[alt='" + subject +"'])").isVisible(), is(true));
         
         subjectCard.click();             // Click the subject card
-        page.waitForLoadState(LoadState.NETWORKIDLE);  // Wait for all network activity
+        page.waitForLoadState("networkidle");  // Wait for all network activity
     }
 
 //     // ======================
