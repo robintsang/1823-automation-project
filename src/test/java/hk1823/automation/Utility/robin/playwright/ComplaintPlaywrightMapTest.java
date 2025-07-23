@@ -1,4 +1,4 @@
-package hk1823.automation.Utility.playwright;
+package hk1823.automation.Utility.robin.playwright;
 
 import com.microsoft.playwright.*;
 import org.junit.jupiter.api.*;
@@ -6,8 +6,12 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.io.File;
+import java.io.IOException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-public class ComplaintPlaywrightAutoUploadTest {
+public class ComplaintPlaywrightMapTest {
     static Playwright playwright;
     static Browser browser;
     BrowserContext context;
@@ -37,7 +41,7 @@ public class ComplaintPlaywrightAutoUploadTest {
     }
 
     @Test
-    public void testOtherCategoryComplaintAutoUpload() throws InterruptedException {
+    public void testOtherCategoryComplaintAutoUpload() throws InterruptedException, IOException {
         // ================== Section A: Open website and enter complaint form ==================
         // Step 1: Open the homepage
         page.navigate("https://www.1823.gov.hk/en/");
@@ -70,11 +74,36 @@ public class ComplaintPlaywrightAutoUploadTest {
         // Step 6: Fill in the case information
         page.fill("xpath=//textarea[@id='個案資料' or @id='个案资料' or @id='Case Information']", caseInfoText);
 
-        // Step 7: Fill in the case location
+        // Step 7: Fill in the case location (address input and suggestion selection)
         String caseLocation = "FU YIP STREET and HUNG LOK STREET junction";
         page.fill("xpath=//input[@id='suggest' or @placeholder='輸入地點' or @placeholder='Enter location' or @placeholder='输入地点']", caseLocation);
         page.waitForSelector("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
         page.click("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
+
+        // Step 7.1: Always click fixed point (230, 250) on the map canvas for testing
+        page.waitForSelector("xpath=//canvas[contains(@class,'ol-unselectable')]");
+        Locator canvas = page.locator("xpath=//canvas[contains(@class,'ol-unselectable')]");
+        com.microsoft.playwright.options.BoundingBox box = canvas.boundingBox();
+        int clickX = (int)box.x + 230;
+        int clickY = (int)box.y + 250;
+        page.mouse().click(clickX, clickY);
+        page.waitForTimeout(1000); // Wait for map to respond
+
+        // Step 7.2: (Commented out) Support reading map_clicks from JSON for batch testing
+        /*
+        ObjectMapper objectMapper = new ObjectMapper();
+        JsonNode complaintData = objectMapper.readTree(new File("src/test/resources/complaint_data.json"));
+        if (complaintData.has("map_clicks")) {
+            for (JsonNode point : complaintData.get("map_clicks")) {
+                int x = point.get("x").asInt();
+                int y = point.get("y").asInt();
+                int batchClickX = (int)box.x + x;
+                int batchClickY = (int)box.y + y;
+                page.mouse().click(batchClickX, batchClickY);
+                page.waitForTimeout(1000); // Wait for map to respond
+            }
+        }
+        */
 
         // ================== Section C: Auto upload files (Playwright only) ==================
         // Step 8: Attempt to automatically upload multiple files (image + video)
@@ -82,7 +111,6 @@ public class ComplaintPlaywrightAutoUploadTest {
         String videoPath = System.getProperty("user.dir") + "/test_uploads/fu_yip_street_flood_video.mp4";
         page.setInputFiles("xpath=//input[contains(@id,'fileupload') and @type='file']",
             new java.nio.file.Path[] { Paths.get(filePath), Paths.get(videoPath) });
-        // Optionally, wait a bit for upload to process
         page.waitForTimeout(2000);
 
         // Step 9: Click the 'Next' button to proceed to the next page
@@ -106,7 +134,6 @@ public class ComplaintPlaywrightAutoUploadTest {
         page.click("xpath=//button[normalize-space()='Next' or contains(text(),'下一步')]");
 
         // ================== Section E: Confirmation page assertions (no upload file checks) ==================
-        // Prepare expected values for batch assertion
         Map<String, String> expectedInfo = new HashMap<>();
         expectedInfo.put("Subject of Service Request/Complaint", "Other Complaints");
         expectedInfo.put("Have you submitted a case to 1823 regarding the same topic?", "No");
@@ -117,7 +144,6 @@ public class ComplaintPlaywrightAutoUploadTest {
         expectedInfo.put("Phone", "66886868");
         // Add more fields as needed
 
-        // Find all info__item blocks on the confirmation page
         int infoItemCount = page.locator("xpath=//div[@class='info__item']").count();
         for (int i = 0; i < infoItemCount; i++) {
             Locator item = page.locator("xpath=//div[@class='info__item']").nth(i);
@@ -125,7 +151,6 @@ public class ComplaintPlaywrightAutoUploadTest {
             String content = "";
             try {
                 title = item.locator("xpath=.//p[@class='info__title']").textContent().trim();
-                // Special handling for Case Location
                 if (title.equals("Case Location")) {
                     content = item.locator("xpath=.//p[@class='map-row__address']").textContent().trim();
                     assertEquals("FU YIP STREET", content, "Case Location should match the system's selected address");
@@ -137,17 +162,12 @@ public class ComplaintPlaywrightAutoUploadTest {
                         content = contentLocator.first().textContent().trim();
                     }
                 }
-                // Do not check Photo/File Upload or file names
                 if (expectedInfo.containsKey(title) && !title.equals("Photo/File Upload")) {
                     assertEquals(expectedInfo.get(title), content, title + " should match");
                 }
             } catch (Exception e) {
-                // Skip if title or content not found
             }
         }
-
-        // ================== Section F: Finish ==================
-        // Step 26: Wait a few seconds to observe the result
         page.waitForTimeout(10000);
     }
 } 

@@ -1,26 +1,29 @@
-package hk1823.automation.Utility.playwright;
+package hk1823.automation.Utility.robin.playwright;
 
 import com.microsoft.playwright.*;
 import org.junit.jupiter.api.*;
 import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.fasterxml.jackson.databind.JsonNode;
-import java.io.File;
-import java.io.IOException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ComplaintPlaywrightMapTest {
+public class ComplaintPlaywrightJsonTest {
     static Playwright playwright;
     static Browser browser;
     BrowserContext context;
     Page page;
+    static JsonNode complaintData;
 
     @BeforeAll
-    static void setupAll() {
+    static void setupAll() throws Exception {
         playwright = Playwright.create();
         browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
+        // Load JSON data
+        ObjectMapper mapper = new ObjectMapper();
+        complaintData = mapper.readTree(Files.readAllBytes(Paths.get("complaints/complaint_robin.json")));
     }
 
     @AfterAll
@@ -41,7 +44,7 @@ public class ComplaintPlaywrightMapTest {
     }
 
     @Test
-    public void testOtherCategoryComplaintAutoUpload() throws InterruptedException, IOException {
+    public void testOtherCategoryComplaintJson() throws InterruptedException {
         // ================== Section A: Open website and enter complaint form ==================
         // Step 1: Open the homepage
         page.navigate("https://www.1823.gov.hk/en/");
@@ -60,50 +63,16 @@ public class ComplaintPlaywrightMapTest {
 
         // Step 5: Detect page language by the main title and set the case information text accordingly
         String titleText = page.textContent("xpath=//span[@class='form-name__lg']").trim();
-        String caseInfoText;
-        if (titleText.contains("要求服務/投訴")) {
-            caseInfoText = "最近家對面馬路等燈處經常因大雨水浸，渠口堵塞，積水不散。此情況已持續多個月。請盡快安排清理。可提供現場照片及影片。";
-        } else if (titleText.contains("Request for Service/Complaint")) {
-            caseInfoText = "The road near my home is often flooded after heavy rain. The drains are blocked and the water does not drain. This has been happening for several months. Please arrange for urgent clearance. Photos and videos are available upon request.";
-        } else if (titleText.contains("要求服务/投诉")) {
-            caseInfoText = "最近家对面马路等灯处经常因大雨水浸，渠口堵塞，积水不散。此情况已持续多个月。请尽快安排清理。可提供现场照片及视频。";
-        } else {
-            caseInfoText = "The road near my home is often flooded after heavy rain. The drains are blocked and the water does not drain. This has been happening for several months. Please arrange for urgent clearance. Photos and videos are available upon request.";
-        }
+        String caseInfoText = complaintData.has("description") ? complaintData.get("description").asText() : "";
 
         // Step 6: Fill in the case information
         page.fill("xpath=//textarea[@id='個案資料' or @id='个案资料' or @id='Case Information']", caseInfoText);
 
-        // Step 7: Fill in the case location (address input and suggestion selection)
-        String caseLocation = "FU YIP STREET and HUNG LOK STREET junction";
+        // Step 7: Fill in the case location
+        String caseLocation = complaintData.has("location") ? complaintData.get("location").asText() : "FU YIP STREET and HUNG LOK STREET junction";
         page.fill("xpath=//input[@id='suggest' or @placeholder='輸入地點' or @placeholder='Enter location' or @placeholder='输入地点']", caseLocation);
         page.waitForSelector("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
         page.click("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
-
-        // Step 7.1: Always click fixed point (230, 250) on the map canvas for testing
-        page.waitForSelector("xpath=//canvas[contains(@class,'ol-unselectable')]");
-        Locator canvas = page.locator("xpath=//canvas[contains(@class,'ol-unselectable')]");
-        com.microsoft.playwright.options.BoundingBox box = canvas.boundingBox();
-        int clickX = (int)box.x + 230;
-        int clickY = (int)box.y + 250;
-        page.mouse().click(clickX, clickY);
-        page.waitForTimeout(1000); // Wait for map to respond
-
-        // Step 7.2: (Commented out) Support reading map_clicks from JSON for batch testing
-        /*
-        ObjectMapper objectMapper = new ObjectMapper();
-        JsonNode complaintData = objectMapper.readTree(new File("src/test/resources/complaint_data.json"));
-        if (complaintData.has("map_clicks")) {
-            for (JsonNode point : complaintData.get("map_clicks")) {
-                int x = point.get("x").asInt();
-                int y = point.get("y").asInt();
-                int batchClickX = (int)box.x + x;
-                int batchClickY = (int)box.y + y;
-                page.mouse().click(batchClickX, batchClickY);
-                page.waitForTimeout(1000); // Wait for map to respond
-            }
-        }
-        */
 
         // ================== Section C: Auto upload files (Playwright only) ==================
         // Step 8: Attempt to automatically upload multiple files (image + video)
@@ -122,9 +91,9 @@ public class ComplaintPlaywrightMapTest {
         // Step 11: Agree to disclose personal data (multi-language)
         page.click("xpath=//label[@for='agree_1']//span[contains(text(),'同意') or contains(text(),'Yes')]");
         // Step 12: Fill in Name, Email, Phone
-        page.fill("xpath=//input[@id='name']", "Robin");
-        page.fill("xpath=//input[@id='email']", "robintesting@gmail.com");
-        page.fill("xpath=//input[@id='phone']", "66886868");
+        page.fill("xpath=//input[@id='name']", complaintData.has("name") ? complaintData.get("name").asText() : "Robin");
+        page.fill("xpath=//input[@id='email']", complaintData.has("email") ? complaintData.get("email").asText() : "robintesting@gmail.com");
+        page.fill("xpath=//input[@id='phone']", complaintData.has("phone") ? complaintData.get("phone").asText() : "66886868");
         // Step 13: Select best time to call (multi-language)
         page.click("xpath=//span[contains(text(),'約下午6:00 - 晚上10:00') or contains(text(),'approximately 6:00 PM - 10:00 PM') or contains(text(),'约下午6:00 - 晚上10:00')]");
         // Step 14: Department needs to provide a reply (multi-language)
@@ -139,9 +108,9 @@ public class ComplaintPlaywrightMapTest {
         expectedInfo.put("Have you submitted a case to 1823 regarding the same topic?", "No");
         expectedInfo.put("Case Information", caseInfoText);
         expectedInfo.put("Case Location", caseLocation);
-        expectedInfo.put("Name", "Robin");
-        expectedInfo.put("Email", "robintesting@gmail.com");
-        expectedInfo.put("Phone", "66886868");
+        expectedInfo.put("Name", complaintData.has("name") ? complaintData.get("name").asText() : "Robin");
+        expectedInfo.put("Email", complaintData.has("email") ? complaintData.get("email").asText() : "robintesting@gmail.com");
+        expectedInfo.put("Phone", complaintData.has("phone") ? complaintData.get("phone").asText() : "66886868");
         // Add more fields as needed
 
         int infoItemCount = page.locator("xpath=//div[@class='info__item']").count();

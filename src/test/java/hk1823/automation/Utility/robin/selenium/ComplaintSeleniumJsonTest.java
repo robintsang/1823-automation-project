@@ -1,4 +1,4 @@
-package hk1823.automation.Utility.selenium;
+package hk1823.automation.Utility.robin.selenium;
 
 import org.junit.jupiter.api.*;
 import org.openqa.selenium.*;
@@ -14,18 +14,26 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class ComplaintSeleniumTest {
+public class ComplaintSeleniumJsonTest {
     private WebDriver driver;
     private WebDriverWait wait;
+    private JsonNode complaintData;
 
     @BeforeAll
-    public void setUp() {
+    public void setUp() throws Exception {
         System.setProperty("webdriver.chrome.driver",
                 "src/main/resources/driver/ChromeDriver/chromedriver-mac-x64/chromedriver");
         driver = new ChromeDriver();
         wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        // Load JSON data
+        ObjectMapper mapper = new ObjectMapper();
+        complaintData = mapper.readTree(Files.readAllBytes(Paths.get("complaints/complaint_robin.json")));
     }
 
     @AfterAll
@@ -63,16 +71,7 @@ public class ComplaintSeleniumTest {
         WebElement titleElement = wait.until(ExpectedConditions.visibilityOfElementLocated(
                 By.xpath("//span[@class='form-name__lg']")));
         String titleText = titleElement.getText().trim();
-        String caseInfoText;
-        if (titleText.contains("要求服務/投訴")) { // Traditional Chinese
-            caseInfoText = "最近家對面馬路等燈處經常因大雨水浸，渠口堵塞，積水不散。此情況已持續多個月。請盡快安排清理。可提供現場照片及影片。";
-        } else if (titleText.contains("Request for Service/Complaint")) { // English
-            caseInfoText = "The road near my home is often flooded after heavy rain. The drains are blocked and the water does not drain. This has been happening for several months. Please arrange for urgent clearance. Photos and videos are available upon request.";
-        } else if (titleText.contains("要求服务/投诉")) { // Simplified Chinese
-            caseInfoText = "最近家对面马路等灯处经常因大雨水浸，渠口堵塞，积水不散。此情况已持续多个月。请尽快安排清理。可提供现场照片及视频。";
-        } else {
-            caseInfoText = "The road near my home is often flooded after heavy rain. The drains are blocked and the water does not drain. This has been happening for several months. Please arrange for urgent clearance. Photos and videos are available upon request.";
-        }
+        String caseInfoText = complaintData.has("description") ? complaintData.get("description").asText() : "";
 
         // Step 6: Fill in the case information
         WebElement caseInfoTextarea = wait.until(ExpectedConditions.visibilityOfElementLocated(
@@ -80,7 +79,7 @@ public class ComplaintSeleniumTest {
         caseInfoTextarea.sendKeys(caseInfoText);
 
         // Step 7: Fill in the case location (multi-language compatible)
-        String caseLocation = "FU YIP STREET and HUNG LOK STREET junction";
+        String caseLocation = complaintData.has("location") ? complaintData.get("location").asText() : "FU YIP STREET and HUNG LOK STREET junction";
         WebElement locationInput = wait.until(ExpectedConditions.elementToBeClickable(
             By.xpath("//input[@id='suggest' or @placeholder='輸入地點' or @placeholder='Enter location' or @placeholder='输入地点']")
         ));
@@ -96,10 +95,7 @@ public class ComplaintSeleniumTest {
         firstSuggestion.click();
 
         // Step 9: (Manual step in demo video) Please upload the file manually at this point.
-        // In the demo video, this step will be performed by hand due to front-end security restrictions.
-        // The automation continues with the rest of the form.
         System.out.println("[INFO] Please upload the file manually at this point in the demo video.");
-        // Pause to allow manual upload during video recording
         try {
             Thread.sleep(20000); // 20 seconds for manual upload
         } catch (InterruptedException e) {
@@ -126,9 +122,9 @@ public class ComplaintSeleniumTest {
         agreeDiscloseYes.click();
 
         // Step 14: Fill in Name, Email, Phone
-        driver.findElement(By.xpath("//input[@id='name']")).sendKeys("Robin");
-        driver.findElement(By.xpath("//input[@id='email']")).sendKeys("robintesting@gmail.com");
-        driver.findElement(By.xpath("//input[@id='phone']")).sendKeys("66886868");
+        driver.findElement(By.xpath("//input[@id='name']")).sendKeys(complaintData.has("name") ? complaintData.get("name").asText() : "Robin");
+        driver.findElement(By.xpath("//input[@id='email']")).sendKeys(complaintData.has("email") ? complaintData.get("email").asText() : "robintesting@gmail.com");
+        driver.findElement(By.xpath("//input[@id='phone']")).sendKeys(complaintData.has("phone") ? complaintData.get("phone").asText() : "66886868");
 
         // Step 15: Select best time to call (multi-language)
         WebElement bestTime = wait.until(ExpectedConditions.elementToBeClickable(
@@ -149,50 +145,39 @@ public class ComplaintSeleniumTest {
         nextButton.click();
 
         // ================== Confirmation page assertions (refreshed elements) ==================
-        // After page transition, always re-find elements to avoid StaleElementReferenceException
-        // Prepare expected values for batch assertion
         Map<String, String> expectedInfo = new HashMap<>();
         expectedInfo.put("Subject of Service Request/Complaint", "Other Complaints");
         expectedInfo.put("Have you submitted a case to 1823 regarding the same topic?", "No");
         expectedInfo.put("Case Information", caseInfoText);
         expectedInfo.put("Case Location", caseLocation);
-        expectedInfo.put("Name", "Robin");
-        expectedInfo.put("Email", "robintesting@gmail.com");
-        expectedInfo.put("Phone", "66886868");
+        expectedInfo.put("Name", complaintData.has("name") ? complaintData.get("name").asText() : "Robin");
+        expectedInfo.put("Email", complaintData.has("email") ? complaintData.get("email").asText() : "robintesting@gmail.com");
+        expectedInfo.put("Phone", complaintData.has("phone") ? complaintData.get("phone").asText() : "66886868");
         // Add more fields as needed
 
-        // Re-find all info__item blocks on the confirmation page
         List<WebElement> infoItems = driver.findElements(By.xpath("//div[@class='info__item']"));
         for (WebElement item : infoItems) {
             String title = "";
             String content = "";
             try {
-                // Always re-find child elements from the current item
                 title = item.findElement(By.xpath(".//p[@class='info__title']")).getText().trim();
-                // Special handling for Case Location
                 if (title.equals("Case Location")) {
                     content = item.findElement(By.xpath(".//p[@class='map-row__address']")).getText().trim();
-                    // Assert system's selected address
                     assertEquals("FU YIP STREET", content, "Case Location should match the system's selected address");
                     continue;
                 }
                 if (expectedInfo.containsKey(title)) {
                     content = item.findElement(By.xpath(".//div[@class='info__content']/p | .//div[@class='info__content']/div/p")).getText().trim();
                 }
-                // Remove all upload file assertions: do not check Photo/File Upload or file names
                 if (expectedInfo.containsKey(title) && !title.equals("Photo/File Upload")) {
                     assertEquals(expectedInfo.get(title), content, title + " should match");
                 }
             } catch (NoSuchElementException e) {
-                // Skip if title or content not found
             }
         }
-        // [Upload file assertions removed: no checks for uploaded file names or counts]
-
-        // ================== Section E: Finish ==================
-        // Step 26: Wait a few seconds to observe the result
-        Thread.sleep(10000); // Wait a few seconds to observe the result
+        Thread.sleep(10000);
     }
-}
+} 
+
 
 // Tests run successfully. Last updated: 2025-07-22 14:35:00 by Robin
