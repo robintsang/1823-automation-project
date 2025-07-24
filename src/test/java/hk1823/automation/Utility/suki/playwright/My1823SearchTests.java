@@ -1,4 +1,4 @@
-package hk1823.automation.Utility.suki.playwright;
+package hk1823.automation.Utility;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
@@ -38,20 +38,70 @@ public class My1823SearchTests {
 
       page.locator("//span[@class='ico ico--search']").click();    
       // input search keyword
-      Locator searchBar = page.locator("//div[@class='panel-body']//input[@placeholder='你想查詢什麼？']");  // Ctrl-Shift-I to investigate www.google.com.hk site
+      Locator searchBar = page.locator("//div[@class='panel-body']//input[@placeholder='你想查詢什麼？']");
       searchBar.click();
-      searchBar.fill("港車北上"); 
-      
+
+      // 測試1：輸入數字
+      searchBar.fill("12345");
       Locator searchBarButton = page.locator("//div[@class='panel-body']//span[@class='search-btn search-btn--lg ico ico--search']");
       searchBarButton.click();
+      // 等待跳轉到搜尋頁面
+      page.waitForURL(url -> url.contains("/search?q=12345"), new Page.WaitForURLOptions().setTimeout(10000));
+      org.junit.jupiter.api.Assertions.assertTrue(
+          page.url().contains("/search?q=12345"),
+          "未正確跳轉到搜尋頁面！"
+      );
+      // 等待內容載入
+      page.waitForSelector("body", new Page.WaitForSelectorOptions().setTimeout(5000));
+      String pageContent = page.content();
+      org.junit.jupiter.api.Assertions.assertTrue(
+          pageContent.contains("搜尋結果"),
+          "搜尋結果頁未顯示預期內容！"
+      );
+      // 返回首頁再測試下一個
+      page.navigate("https://www.1823.gov.hk/tc");
+      page.waitForLoadState(LoadState.DOMCONTENTLOADED);
+      // 點擊搜尋圖標
+      page.locator("//span[@class='ico ico--search']").click();
+      // 等待搜尋欄可見
+      page.waitForSelector("//div[@class='panel-body']//input[@placeholder='你想查詢什麼？']", new Page.WaitForSelectorOptions().setTimeout(5000));
+      searchBar = page.locator("//div[@class='panel-body']//input[@placeholder='你想查詢什麼？']");
+      searchBar.click(); 
 
-      // 等待搜尋結果出現
-      page.waitForSelector("//a[contains(text(),'如何申請「港珠澳大橋港車北上」（「港車北上」）？')]", new Page.WaitForSelectorOptions().setTimeout(5000));
+      // 輸入空格
+      searchBar.fill("  "); // 兩個空格
+      searchBarButton.click();
+      // 等待跳轉到搜尋頁面
+      page.waitForURL(url -> url.contains("/search?q="), new Page.WaitForURLOptions().setTimeout(10000));
+      org.junit.jupiter.api.Assertions.assertTrue(
+          page.url().contains("/search?q="),
+          "空格搜尋未正確跳轉到搜尋頁面！"
+      );
+      // 等待內容載入
+      page.waitForSelector("body", new Page.WaitForSelectorOptions().setTimeout(5000));
+      String pageContent2 = page.content();
+      org.junit.jupiter.api.Assertions.assertTrue(
+          pageContent2.contains("找不到相關結果"),
+          "搜尋結果頁未顯示「找不到相關結果」！"
+      );
+      // 返回首頁再測試下一個
+      page.navigate("https://www.1823.gov.hk/tc");
+      page.waitForLoadState(LoadState.DOMCONTENTLOADED);
+      // 點擊搜尋圖標
+      page.locator("//span[@class='ico ico--search']").click();
+      // 等待搜尋欄可見
+      page.waitForSelector("//div[@class='panel-body']//input[@placeholder='你想查詢什麼？']", new Page.WaitForSelectorOptions().setTimeout(5000));
+      searchBar = page.locator("//div[@class='panel-body']//input[@placeholder='你想查詢什麼？']");
+      searchBar.click(); 
 
-      // 斷言：確認搜尋結果連結可見
+      // 測試3：輸入文字
+      searchBar.fill("港車北上"); 
+      searchBarButton = page.locator("//div[@class='panel-body']//span[@class='search-btn search-btn--lg ico ico--search']");
+      searchBarButton.click();
+      page.waitForSelector("//a[contains(text(),'如何申請「港珠澳大橋港車北上」（「港車北上」）？')]", new Page.WaitForSelectorOptions().setTimeout(10000));
       org.junit.jupiter.api.Assertions.assertTrue(
           page.locator("//a[contains(text(),'如何申請「港珠澳大橋港車北上」（「港車北上」）？')]").isVisible(),
-          "搜尋結果連結未正確顯示！"
+          "文字搜尋未正確跳轉到搜尋頁面！"
       );
 
       Locator searchResult = page.locator("//a[contains(text(),'如何申請「港珠澳大橋港車北上」（「港車北上」）？')]");
@@ -90,5 +140,4 @@ public class My1823SearchTests {
       playwright.close();
     }
 }
-
 
