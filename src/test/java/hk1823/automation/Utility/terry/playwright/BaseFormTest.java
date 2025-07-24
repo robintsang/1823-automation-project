@@ -261,7 +261,9 @@ public class BaseFormTest {
             });
             
             List<Path> filesList = new ArrayList<>();
-            String basePath = "testPhoto";
+            // 將測試圖片路徑改為 test_uploads/terry/ 目錄
+            // Change test image path to test_uploads/terry/ directory
+            String basePath = System.getProperty("user.dir") + "/test_uploads/terry/testPhoto";
             for (int i = 1; i <= 10; i++) {
                 filesList.add(Paths.get(basePath + i + ".jpg"));
             }
