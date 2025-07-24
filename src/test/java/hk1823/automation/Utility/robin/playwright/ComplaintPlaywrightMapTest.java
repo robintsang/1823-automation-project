@@ -107,10 +107,10 @@ public class ComplaintPlaywrightMapTest {
 
         // ================== Section C: Auto upload files (Playwright only) ==================
         // Step 8: Attempt to automatically upload multiple files (image + video)
-        // 將測試圖片和影片路徑改為 Terry 專屬目錄
-        // Change test image and video path to Terry's directory
-        String filePath = System.getProperty("user.dir") + "/test_uploads/terry/fu_yip_street_flood_image.jpg";
-        String videoPath = System.getProperty("user.dir") + "/test_uploads/terry/fu_yip_street_flood_video.mp4";
+        // 將測試圖片和影片路徑改為 Robin 專屬目錄
+        // Change test image and video path to Robin's directory
+        String filePath = System.getProperty("user.dir") + "/test_uploads/robin/fu_yip_street_flood_image.jpg";
+        String videoPath = System.getProperty("user.dir") + "/test_uploads/robin/fu_yip_street_flood_video.mp4";
         page.setInputFiles("xpath=//input[contains(@id,'fileupload') and @type='file']",
             new java.nio.file.Path[] { Paths.get(filePath), Paths.get(videoPath) });
         page.waitForTimeout(2000);
