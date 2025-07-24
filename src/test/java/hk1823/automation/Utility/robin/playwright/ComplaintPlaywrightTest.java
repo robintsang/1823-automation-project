@@ -74,6 +74,8 @@ public class ComplaintPlaywrightTest {
         page.click("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
 
         // Step 8: (Manual step in demo video) Please upload the file manually at this point.
+        // 請於手動上傳時，從 test_uploads/terry/ 目錄選擇 Terry 的測試圖片
+        // When uploading manually, please select Terry's test images from test_uploads/terry/
         System.out.println("[INFO] Please upload the file manually at this point in the demo video.");
         // Pause to allow manual upload during video recording
         page.waitForTimeout(20000); // 20 seconds for manual upload
