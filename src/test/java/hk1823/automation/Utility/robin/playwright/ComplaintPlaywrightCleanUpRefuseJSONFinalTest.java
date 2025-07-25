@@ -8,6 +8,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.Arrays;
 import java.util.List;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ComplaintPlaywrightCleanUpRefuseJSONFinalTest {
     static Playwright playwright;
@@ -76,13 +77,17 @@ public class ComplaintPlaywrightCleanUpRefuseJSONFinalTest {
     }
 
     @Test
-    public void testCleanUpRefuseCategory() throws InterruptedException {
-        // ================== Section A: Open website and enter complaint form ==================
+    public void testCleanUpRefuseCategory() throws InterruptedException, java.io.IOException {
+        // Section A: Open website and enter complaint form
         page.navigate("https://www.1823.gov.hk/en/");
         page.click("xpath=//a[contains(@href, '/form/complain') and contains(@class, 'menu__link--lv1')]");
 
-        // Step 3: Select 'Clean-up of Refuses or Streets' category
-        String category = "Clean-up of Refuses or Streets";
+        // Step 3: Select 'Clean-up of Refuses or Streets' category from JSON
+        ComplaintData data = new ObjectMapper().readValue(
+            Paths.get("complaints/complaint_clean-up_of_refuses_or_streets_2025-07-25T19-43-07-688Z_testing.json").toFile(),
+            ComplaintData.class
+        );
+        String category = data.category;
         page.waitForSelector("a.option img");
         boolean found = false;
         for (ElementHandle img : page.querySelectorAll("a.option img")) {
@@ -97,10 +102,23 @@ public class ComplaintPlaywrightCleanUpRefuseJSONFinalTest {
             throw new RuntimeException("No matching complaint category found on page for: " + category);
         }
 
-        // Step 4: 选择 Clean-up of Refuses or Streets 下的第2个选项 Issues of refuse collection facilities
-        page.waitForSelector("//span[contains(text(),'Issues of refuse collection facilities')]");
-        page.click("//span[contains(text(),'Issues of refuse collection facilities')]");
-        clickNextIfExists(page); // 選擇後自動點擊“下一步” (Auto click 'Next' after selection)
+        // Step 4: Dynamically select sub_category_1 and sub_category_1.2 from JSON
+        if (data.sub_category_1 != null && !data.sub_category_1.isEmpty()) {
+            page.waitForSelector("//span[contains(text(), '" + data.sub_category_1 + "')]");
+            page.click("//span[contains(text(), '" + data.sub_category_1 + "')]");
+            // Wait for subcategory options to load
+            page.waitForTimeout(2000);
+            // Screenshot for debug
+            page.screenshot(new Page.ScreenshotOptions().setPath(Paths.get("after_main_category.png")));
+        }
+        if (data.sub_category_1_2 != null && !data.sub_category_1_2.isEmpty()) {
+            page.waitForSelector("//span[contains(text(), '" + data.sub_category_1_2 + "')]");
+            page.click("//span[contains(text(), '" + data.sub_category_1_2 + "')]");
+        }
+        clickNextIfExists(page); // Auto click 'Next' after selection
+
+        // Wait for page transition after selecting subcategories
+        page.waitForTimeout(1500);
 
         // Step 5: Detect page language by the main title and set the case information text accordingly
         String titleText = page.textContent("xpath=//span[@class='form-name__lg']").trim();
@@ -115,22 +133,29 @@ public class ComplaintPlaywrightCleanUpRefuseJSONFinalTest {
             caseInfoText = "Refuse bins are overflowing and have not been emptied, affecting the cityscape.";
         }
 
-        // Step 6: Fill in the case information
-        page.fill("xpath=//textarea[@id='Supplementary Information' or @id='個案資料' or @id='个案资料' or @id='Case Information']", caseInfoText);
+        // Step 6: Fill in the case information (robust for both normal and 'Other complaint' pages)
+        page.waitForSelector("xpath=//textarea[@id='Supplementary Information' or @id='Case Information']");
+        if (page.locator("xpath=//textarea[@id='Supplementary Information']").count() > 0) {
+            page.fill("xpath=//textarea[@id='Supplementary Information']", caseInfoText);
+        } else if (page.locator("xpath=//textarea[@id='Case Information']").count() > 0) {
+            page.fill("xpath=//textarea[@id='Case Information']", caseInfoText);
+        } else {
+            throw new RuntimeException("No suitable textarea found for case information!");
+        }
 
         // Step 7: Fill in the case location
-        String caseLocation = "NATHAN ROAD";
+        String caseLocation = data.location;
         page.fill("xpath=//input[@id='suggest' or @placeholder='輸入地點' or @placeholder='Enter location' or @placeholder='输入地点']", caseLocation);
         page.waitForSelector("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
         page.click("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
 
-        // ================== Section B: 填寫投訴內容 (Fill in complaint content) ==================
-        // Step B-1: 選擇「否/No」作為是否曾提交同類個案 (Select 'No' for 'Have you submitted a case to 1823 regarding the same topic?')
+        // Section B: Fill in complaint content
+        // Step B-1: Select 'No' for 'Have you submitted a case to 1823 regarding the same topic?'
         page.waitForSelector("xpath=//span[contains(text(),'沒有') or normalize-space()='No' or contains(text(),'没有')]/ancestor::label");
         page.click("xpath=//span[contains(text(),'沒有') or normalize-space()='No' or contains(text(),'没有')]/ancestor::label");
 
-        // ================== Section C: Auto upload files (Playwright only) ==================
-        // Step 8: 只上传 refuse_example.jpg (Only upload refuse_example.jpg)
+        // Section C: Auto upload files (Playwright only)
+        // Step 8: Only upload refuse_example.jpg
         String filePath = System.getProperty("user.dir") + "/test_uploads/robin/refuse_example.jpg";
         page.setInputFiles("xpath=//input[contains(@id,'fileupload') and @type='file']",
             new java.nio.file.Path[] { Paths.get(filePath) });
@@ -141,22 +166,22 @@ public class ComplaintPlaywrightCleanUpRefuseJSONFinalTest {
         page.click("xpath=//button[normalize-space()='下一步' or normalize-space()='Next']");
 
         // Step 10: Auto slow scroll down for recording
-        page.waitForTimeout(500); // 等待頁面穩定
+        page.waitForTimeout(500); // Wait for page to stabilize
         int scrollHeight = (int) page.evaluate("() => document.body.scrollHeight");
         for (int y = 0; y < scrollHeight; y += 100) {
             page.evaluate("window.scrollTo(0, " + y + ")");
             page.waitForTimeout(100);
         }
 
-        // ================== Section D: Fill in personal information ==================
+        // Section D: Fill in personal information
         // Step 11: Agree to provide contact information (multi-language)
         page.click("xpath=//label[@for='agree_1823_1']//span[contains(text(),'Yes') or contains(text(),'同意')]");
         // Step 12: Agree to disclose personal data (multi-language)
         page.click("xpath=//label[@for='agree_1']//span[contains(text(),'同意') or contains(text(),'Yes')]");
         // Step 13: Fill in Name, Email, Phone
-        page.fill("xpath=//input[@id='name']", "Robin");
-        page.fill("xpath=//input[@id='email']", "robintesting@gmail.com");
-        page.fill("xpath=//input[@id='phone']", "66886868");
+        page.fill("xpath=//input[@id='name']", data.name);
+        page.fill("xpath=//input[@id='email']", data.email);
+        page.fill("xpath=//input[@id='phone']", data.phone);
         // Step 14: Select best time to call (multi-language)
         page.click("xpath=//span[contains(text(),'約下午6:00 - 晚上10:00') or contains(text(),'approximately 6:00 PM - 10:00 PM') or contains(text(),'约下午6:00 - 晚上10:00')]");
         // Step 15: Department needs to provide a reply (multi-language)
@@ -166,23 +191,22 @@ public class ComplaintPlaywrightCleanUpRefuseJSONFinalTest {
         page.click("xpath=//button[normalize-space()='Next' or contains(text(),'下一步')]");
 
         // Step 17: Auto slow scroll down for recording
-        page.waitForTimeout(500); // 等待頁面穩定
+        page.waitForTimeout(500); // Wait for page to stabilize
         scrollHeight = (int) page.evaluate("() => document.body.scrollHeight");
         for (int y = 0; y < scrollHeight; y += 100) {
             page.evaluate("window.scrollTo(0, " + y + ")");
             page.waitForTimeout(100);
         }
 
-        // ================== Section E: Confirmation page assertions (no upload file checks) ==================
+        // Section E: Confirmation page assertions (no upload file checks)
         // Step 18: Assert confirmation page info matches expected values
         Map<String, String> expectedInfo = new HashMap<>();
-        // 不再包含 Subject 字段
         expectedInfo.put("Have you submitted a case to 1823 regarding the same topic?", "No");
         expectedInfo.put("Case Information", caseInfoText);
         expectedInfo.put("Case Location", caseLocation);
-        expectedInfo.put("Name", "Robin");
-        expectedInfo.put("Email", "robintesting@gmail.com");
-        expectedInfo.put("Phone", "66886868");
+        expectedInfo.put("Name", data.name);
+        expectedInfo.put("Email", data.email);
+        expectedInfo.put("Phone", data.phone);
         // Add more fields as needed
 
         // Find all info__item blocks on the confirmation page
@@ -196,7 +220,7 @@ public class ComplaintPlaywrightCleanUpRefuseJSONFinalTest {
                 // Special handling for Case Location
                 if (title.equals("Case Location")) {
                     content = item.locator("xpath=.//p[@class='map-row__address']").textContent().trim();
-                    // 斷言地點應與輸入一致 (Assert location matches input)
+                    // Assert location matches input
                     assertEquals(caseLocation, content, "Case Location should match the system's selected address");
                     continue;
                 }
@@ -215,7 +239,7 @@ public class ComplaintPlaywrightCleanUpRefuseJSONFinalTest {
             }
         }
 
-        // ================== Section F: Finish ==================
+        // Section F: Finish
         // Step 26: Wait a few seconds to observe the result
         page.waitForTimeout(10000);
     }
