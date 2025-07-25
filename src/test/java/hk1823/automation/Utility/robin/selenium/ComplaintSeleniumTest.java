@@ -25,6 +25,13 @@ public class ComplaintSeleniumTest {
         System.setProperty("webdriver.chrome.driver",
                 "src/main/resources/driver/ChromeDriver/chromedriver-mac-x64/chromedriver");
         driver = new ChromeDriver();
+        // 設定視窗大小為 1920x1280 (Set window size to 1920x1280)
+        driver.manage().window().setSize(new org.openqa.selenium.Dimension(1920, 1280));
+        // 取得螢幕尺寸並將視窗移到螢幕中央 (Get screen size and center window)
+        java.awt.Dimension screenSize = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+        int x = (screenSize.width - 1920) / 2;
+        int y = (screenSize.height - 1280) / 2;
+        driver.manage().window().setPosition(new org.openqa.selenium.Point(x, y));
         wait = new WebDriverWait(driver, Duration.ofSeconds(10));
     }
 
@@ -95,15 +102,21 @@ public class ComplaintSeleniumTest {
         );
         firstSuggestion.click();
 
-        // Step 9: (Manual step in demo video) Please upload the file manually at this point.
-        // 請於手動上傳時，從 test_uploads/terry/ 目錄選擇 Terry 的測試圖片
-        // When uploading manually, please select Terry's test images from test_uploads/terry/
-        System.out.println("[INFO] Please upload the file manually at this point in the demo video.");
-        // Pause to allow manual upload during video recording
+        // Step 9: 自動上傳多個檔案（Selenium sendKeys 方法，支援 multiple）
+        // Auto upload multiple files using Selenium sendKeys method (support multiple)
+        // 注意：input[type='file'] 必須是可見且未被JS覆蓋，否則sendKeys會失敗
+        String filePath1 = System.getProperty("user.dir") + "/test_uploads/robin/fu_yip_street_flood_image.jpg";
+        String filePath2 = System.getProperty("user.dir") + "/test_uploads/robin/fu_yip_street_flood_video.mp4";
         try {
-            Thread.sleep(20000); // 20 seconds for manual upload
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            WebElement fileInput = driver.findElement(By.xpath("//input[contains(@id,'fileupload') and @type='file']"));
+            // 嘗試多檔案上傳（若input有multiple屬性）
+            fileInput.sendKeys(filePath1 + "\n" + filePath2);
+            Thread.sleep(2000); // 等待上传
+            // 只将上传区滚动到可见，不再全页 scroll down
+            // Scroll upload area into view only (不要全页 scroll)
+            ((JavascriptExecutor)driver).executeScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", fileInput);
+        } catch (Exception e) {
+            System.out.println("[警告] sendKeys自動上傳失敗，請檢查input[type='file']是否可見或考慮Robot/JavascriptExecutor方法。");
         }
 
         // Step 10: Click the 'Next' button to proceed to the next page (multi-language compatible)
@@ -111,6 +124,18 @@ public class ComplaintSeleniumTest {
             By.xpath("//button[normalize-space()='下一步' or normalize-space()='Next' or normalize-space()='下一步']")
         ));
         nextButton.click();
+
+        // Step 11: 個人資料頁自動慢慢scroll down，方便錄影
+        // Auto slow scroll down on personal info page for recording
+        try {
+            long scrollHeight = (Long)((JavascriptExecutor)driver).executeScript("return document.body.scrollHeight");
+            for (int y = 0; y < scrollHeight; y += 100) {
+                ((JavascriptExecutor)driver).executeScript("window.scrollTo(0, arguments[0]);", y);
+                Thread.sleep(100); // 每100px停0.1秒
+            }
+        } catch (Exception e) {
+            System.out.println("[警告] scroll down 失敗: " + e.getMessage());
+        }
 
         // ================== Section C: Fill in personal information ==================
         // Step 12: Agree to provide contact information (multi-language)
@@ -147,6 +172,18 @@ public class ComplaintSeleniumTest {
             By.xpath("//button[normalize-space()='Next' or contains(text(),'下一步')]")
         ));
         nextButton.click();
+
+        // Step 18: 確認頁面自動慢慢scroll down，方便錄影
+        // Auto slow scroll down on confirmation page for recording
+        try {
+            long scrollHeight = (Long)((JavascriptExecutor)driver).executeScript("return document.body.scrollHeight");
+            for (int y = 0; y < scrollHeight; y += 100) {
+                ((JavascriptExecutor)driver).executeScript("window.scrollTo(0, arguments[0]);", y);
+                Thread.sleep(100); // 每100px停0.1秒
+            }
+        } catch (Exception e) {
+            System.out.println("[警告] scroll down 失敗: " + e.getMessage());
+        }
 
         // ================== Confirmation page assertions (refreshed elements) ==================
         // After page transition, always re-find elements to avoid StaleElementReferenceException

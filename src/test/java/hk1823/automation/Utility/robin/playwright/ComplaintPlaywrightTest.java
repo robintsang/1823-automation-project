@@ -5,6 +5,8 @@ import org.junit.jupiter.api.*;
 import java.util.HashMap;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import java.util.List;
+import java.util.Arrays;
 
 public class ComplaintPlaywrightTest {
     static Playwright playwright;
@@ -26,8 +28,36 @@ public class ComplaintPlaywrightTest {
 
     @BeforeEach
     void setup() {
-        context = browser.newContext();
+        // 設定瀏覽器視窗大小為 1920x1280 (Set browser viewport to 1920x1280)
+        context = browser.newContext(new Browser.NewContextOptions().setViewportSize(1920, 1280));
         page = context.newPage();
+        // 自動將 Chromium 視窗移到螢幕中央 (Center Chromium window on screen)
+        try {
+            java.awt.Dimension screenSize = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+            int x = (screenSize.width - 1920) / 2;
+            int y = (screenSize.height - 1280) / 2;
+            String os = System.getProperty("os.name").toLowerCase();
+            if (os.contains("mac")) {
+                // macOS: AppleScript
+                String script = String.format(
+                    "osascript -e 'tell application \"Google Chrome\" to set the bounds of the first window to {%d, %d, %d, %d}'",
+                    x, y, x + 1920, y + 1280
+                );
+                Runtime.getRuntime().exec(script);
+            } else if (os.contains("win")) {
+                // Windows: PowerShell
+                String ps = String.format(
+                    "$hwnd = (Get-Process chrome | Where-Object {{$_.MainWindowTitle}} | Select-Object -First 1).MainWindowHandle; " +
+                    "Add-Type -TypeDefinition '[DllImport(\"user32.dll\")]public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);' -Name Win32 -Namespace Native; " +
+                    "[Native.Win32]::MoveWindow($hwnd, %d, %d, %d, %d, $true);",
+                    x, y, 1920, 1280
+                );
+                String[] cmd = {"powershell", "-Command", ps};
+                Runtime.getRuntime().exec(cmd);
+            }
+        } catch (Exception e) {
+            System.out.println("[警告] 無法自動置中 Chromium 視窗: " + e.getMessage());
+        }
     }
 
     @AfterEach
@@ -82,6 +112,15 @@ public class ComplaintPlaywrightTest {
 
         // Step 9: Click the 'Next' button to proceed to the next page (Selenium XPath)
         page.click("xpath=//button[normalize-space()='下一步' or normalize-space()='Next']");
+
+        // Step X: 自動慢慢scroll down，方便錄影
+        // Auto slow scroll down for recording
+        page.waitForTimeout(500); // 等待頁面穩定
+        int scrollHeight = (int) page.evaluate("() => document.body.scrollHeight");
+        for (int y = 0; y < scrollHeight; y += 100) {
+            page.evaluate("window.scrollTo(0, " + y + ")");
+            page.waitForTimeout(100);
+        }
 
         // Step 10: Fill in personal information (Selenium XPath)
         page.click("xpath=//label[@for='agree_1823_1']//span[contains(text(),'Yes') or contains(text(),'同意')]");

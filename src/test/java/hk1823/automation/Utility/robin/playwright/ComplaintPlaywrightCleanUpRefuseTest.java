@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.Arrays;
 import java.util.List;
 
-public class ComplaintPlaywrightAutoUploadTest {
+public class ComplaintPlaywrightCleanUpRefuseTest {
     static Playwright playwright;
     static Browser browser;
     BrowserContext context;
@@ -39,14 +39,12 @@ public class ComplaintPlaywrightAutoUploadTest {
             int y = (screenSize.height - 1280) / 2;
             String os = System.getProperty("os.name").toLowerCase();
             if (os.contains("mac")) {
-                // macOS: AppleScript
                 String script = String.format(
                     "osascript -e 'tell application \"Google Chrome\" to set the bounds of the first window to {%d, %d, %d, %d}'",
                     x, y, x + 1920, y + 1280
                 );
                 Runtime.getRuntime().exec(script);
             } else if (os.contains("win")) {
-                // Windows: PowerShell
                 String ps = String.format(
                     "$hwnd = (Get-Process chrome | Where-Object {{$_.MainWindowTitle}} | Select-Object -First 1).MainWindowHandle; " +
                     "Add-Type -TypeDefinition '[DllImport(\"user32.dll\")]public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);' -Name Win32 -Namespace Native; " +
@@ -66,36 +64,25 @@ public class ComplaintPlaywrightAutoUploadTest {
         if (context != null) context.close();
     }
 
-    @Test
-    public void testOtherCategoryComplaintAutoUpload() throws InterruptedException {
-        // ================== Section A: Open website and enter complaint form ==================
-        // Step 1: Open the homepage
-        page.navigate("https://www.1823.gov.hk/en/");
+    // 自動檢測並點擊“下一步”按鈕 (Auto-detect and click the 'Next' button if present)
+    void clickNextIfExists(Page page) {
+        try {
+            page.waitForSelector("xpath=//button[normalize-space()='下一步' or normalize-space()='Next']", new Page.WaitForSelectorOptions().setTimeout(2000));
+            page.click("xpath=//button[normalize-space()='下一步' or normalize-space()='Next']");
+            page.waitForTimeout(500); // 等待頁面切換 (Wait for page transition)
+        } catch (Exception e) {
+            // 沒有“下一步”按鈕時不報錯 (No error if 'Next' button not found)
+        }
+    }
 
-        // Step 2: Click the 'Request for Service/Complaint' button in the top navigation
+    @Test
+    public void testCleanUpRefuseCategory() throws InterruptedException {
+        // ================== Section A: Open website and enter complaint form ==================
+        page.navigate("https://www.1823.gov.hk/en/");
         page.click("xpath=//a[contains(@href, '/form/complain') and contains(@class, 'menu__link--lv1')]");
 
-        // Step 3: Strictly select complaint category based on JSON 'category' field
-        List<String> validCategories = Arrays.asList(
-            "Clean-up of Refuses or Streets",
-            "Water Dripping outside Building Units",
-            "Obstruction and Hygiene Problems Caused by Food Premises",
-            "Repair and Cleansing of Public Lighting Facilities",
-            "Water Seepage inside the flat",
-            "Road Repair",
-            "Tree",
-            "Slope",
-            "Public Transport Services Staff & Service Quality",
-            "Illegal Parking in Public Housing Area",
-            "Non-emergency traffic offences",
-            "Other Complaints"
-        );
-        // Read category from JSON (hardcoded here, replace with JSON if needed)
-        String category = "Other Complaints";
-        if (!validCategories.contains(category)) {
-            throw new RuntimeException("JSON 'category' field must be one of the 12 valid categories, but got: " + category);
-        }
-        // Wait for all category options to be present
+        // Step 3: Select 'Clean-up of Refuses or Streets' category
+        String category = "Clean-up of Refuses or Streets";
         page.waitForSelector("a.option img");
         boolean found = false;
         for (ElementHandle img : page.querySelectorAll("a.option img")) {
@@ -110,45 +97,44 @@ public class ComplaintPlaywrightAutoUploadTest {
             throw new RuntimeException("No matching complaint category found on page for: " + category);
         }
 
-        // ================== Section B: Fill in complaint content ==================
-        // Step 4: Wait for the content form to appear and select 'No' (multi-language compatible)
-        page.waitForSelector("xpath=//span[contains(text(),'沒有') or normalize-space()='No' or contains(text(),'没有')]/ancestor::label");
-        page.click("xpath=//span[contains(text(),'沒有') or normalize-space()='No' or contains(text(),'没有')]/ancestor::label");
+        // Step 4: 选择 Clean-up of Refuses or Streets 下的第2个选项 Issues of refuse collection facilities
+        page.waitForSelector("//span[contains(text(),'Issues of refuse collection facilities')]");
+        page.click("//span[contains(text(),'Issues of refuse collection facilities')]");
+        clickNextIfExists(page); // 選擇後自動點擊“下一步” (Auto click 'Next' after selection)
 
         // Step 5: Detect page language by the main title and set the case information text accordingly
         String titleText = page.textContent("xpath=//span[@class='form-name__lg']").trim();
         String caseInfoText;
         if (titleText.contains("要求服務/投訴")) {
-            caseInfoText = "最近家對面馬路等燈處經常因大雨水浸，渠口堵塞，積水不散。此情況已持續多個月。請盡快安排清理。可提供現場照片及影片。";
+            caseInfoText = "垃圾桶爆滿無人清理影響市容。";
         } else if (titleText.contains("Request for Service/Complaint")) {
-            caseInfoText = "The road near my home is often flooded after heavy rain. The drains are blocked and the water does not drain. This has been happening for several months. Please arrange for urgent clearance. Photos and videos are available upon request.";
+            caseInfoText = "Refuse bins are overflowing and have not been emptied, affecting the cityscape.";
         } else if (titleText.contains("要求服务/投诉")) {
-            caseInfoText = "最近家对面马路等灯处经常因大雨水浸，渠口堵塞，积水不散。此情况已持续多个月。请尽快安排清理。可提供现场照片及视频。";
+            caseInfoText = "垃圾桶爆满无人清理影响市容。";
         } else {
-            caseInfoText = "The road near my home is often flooded after heavy rain. The drains are blocked and the water does not drain. This has been happening for several months. Please arrange for urgent clearance. Photos and videos are available upon request.";
+            caseInfoText = "Refuse bins are overflowing and have not been emptied, affecting the cityscape.";
         }
 
         // Step 6: Fill in the case information
-        page.fill("xpath=//textarea[@id='個案資料' or @id='个案资料' or @id='Case Information']", caseInfoText);
+        page.fill("xpath=//textarea[@id='Supplementary Information' or @id='個案資料' or @id='个案资料' or @id='Case Information']", caseInfoText);
 
         // Step 7: Fill in the case location
-        String caseLocation = "FU YIP STREET and HUNG LOK STREET junction";
+        String caseLocation = "NATHAN ROAD";
         page.fill("xpath=//input[@id='suggest' or @placeholder='輸入地點' or @placeholder='Enter location' or @placeholder='输入地点']", caseLocation);
         page.waitForSelector("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
         page.click("xpath=//ul[contains(@class,'ui-autocomplete') and not(contains(@style,'display: none'))]//div[1]");
 
+        // ================== Section B: 填寫投訴內容 (Fill in complaint content) ==================
+        // Step B-1: 選擇「否/No」作為是否曾提交同類個案 (Select 'No' for 'Have you submitted a case to 1823 regarding the same topic?')
+        page.waitForSelector("xpath=//span[contains(text(),'沒有') or normalize-space()='No' or contains(text(),'没有')]/ancestor::label");
+        page.click("xpath=//span[contains(text(),'沒有') or normalize-space()='No' or contains(text(),'没有')]/ancestor::label");
+
         // ================== Section C: Auto upload files (Playwright only) ==================
-        // Step 8: Attempt to automatically upload multiple files (image + video)
-        // 將測試圖片和影片路徑改為 Robin 專屬目錄
-        // Change test image and video path to Robin's directory
-        String filePath = System.getProperty("user.dir") + "/test_uploads/robin/fu_yip_street_flood_image.jpg";
-        String videoPath = System.getProperty("user.dir") + "/test_uploads/robin/fu_yip_street_flood_video.mp4";
+        // Step 8: 只上传 refuse_example.jpg (Only upload refuse_example.jpg)
+        String filePath = System.getProperty("user.dir") + "/test_uploads/robin/refuse_example.jpg";
         page.setInputFiles("xpath=//input[contains(@id,'fileupload') and @type='file']",
-            new java.nio.file.Path[] { Paths.get(filePath), Paths.get(videoPath) });
-        // Optionally, wait a bit for upload to process
+            new java.nio.file.Path[] { Paths.get(filePath) });
         page.waitForTimeout(2000);
-        // 只将上传区滚动到可见，不再全页 scroll down
-        // Scroll upload area into view only (不要全页 scroll)
         page.locator("xpath=//input[contains(@id,'fileupload') and @type='file']").scrollIntoViewIfNeeded();
 
         // Step 9: Click the 'Next' button to proceed to the next page
@@ -190,7 +176,7 @@ public class ComplaintPlaywrightAutoUploadTest {
         // ================== Section E: Confirmation page assertions (no upload file checks) ==================
         // Step 18: Assert confirmation page info matches expected values
         Map<String, String> expectedInfo = new HashMap<>();
-        expectedInfo.put("Subject of Service Request/Complaint", "Other Complaints");
+        // 不再包含 Subject 字段
         expectedInfo.put("Have you submitted a case to 1823 regarding the same topic?", "No");
         expectedInfo.put("Case Information", caseInfoText);
         expectedInfo.put("Case Location", caseLocation);
@@ -210,7 +196,8 @@ public class ComplaintPlaywrightAutoUploadTest {
                 // Special handling for Case Location
                 if (title.equals("Case Location")) {
                     content = item.locator("xpath=.//p[@class='map-row__address']").textContent().trim();
-                    assertEquals("FU YIP STREET", content, "Case Location should match the system's selected address");
+                    // 斷言地點應與輸入一致 (Assert location matches input)
+                    assertEquals(caseLocation, content, "Case Location should match the system's selected address");
                     continue;
                 }
                 if (expectedInfo.containsKey(title)) {

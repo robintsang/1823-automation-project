@@ -1,4 +1,4 @@
-package hk1823.automation.Utility.terry.playwright;
+package hk1823.automation.Utility.robin;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterAll;
@@ -7,7 +7,7 @@ import com.microsoft.playwright.*;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 
-public class MakeComplaintsTests {
+public class ChatRoomPlaywrightTests {
     static Playwright playwright;
     static BrowserType browserType;
     static BrowserContext browserContext;
@@ -21,9 +21,37 @@ public class MakeComplaintsTests {
         browserType = playwright.chromium();
         browserContext = browserType.launchPersistentContext(
             path,
-            new BrowserType.LaunchPersistentContextOptions().setHeadless(false)
+            // 設定瀏覽器視窗大小為 1920x1280 (Set browser viewport to 1920x1280)
+            new BrowserType.LaunchPersistentContextOptions().setHeadless(false).setViewportSize(1920, 1280)
         );
         page = browserContext.newPage();
+        // 自動將 Chromium 視窗移到螢幕中央 (Center Chromium window on screen)
+        try {
+            java.awt.Dimension screenSize = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+            int x = (screenSize.width - 1920) / 2;
+            int y = (screenSize.height - 1280) / 2;
+            String os = System.getProperty("os.name").toLowerCase();
+            if (os.contains("mac")) {
+                // macOS: AppleScript
+                String script = String.format(
+                    "osascript -e 'tell application \"Google Chrome\" to set the bounds of the first window to {%d, %d, %d, %d}'",
+                    x, y, x + 1920, y + 1280
+                );
+                Runtime.getRuntime().exec(script);
+            } else if (os.contains("win")) {
+                // Windows: PowerShell
+                String ps = String.format(
+                    "$hwnd = (Get-Process chrome | Where-Object {{$_.MainWindowTitle}} | Select-Object -First 1).MainWindowHandle; " +
+                    "Add-Type -TypeDefinition '[DllImport(\"user32.dll\")]public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);' -Name Win32 -Namespace Native; " +
+                    "[Native.Win32]::MoveWindow($hwnd, %d, %d, %d, %d, $true);",
+                    x, y, 1920, 1280
+                );
+                String[] cmd = {"powershell", "-Command", ps};
+                Runtime.getRuntime().exec(cmd);
+            }
+        } catch (Exception e) {
+            System.out.println("[警告] 無法自動置中 Chromium 視窗: " + e.getMessage());
+        }
     }
 
     @AfterAll

@@ -12,7 +12,35 @@ public class Playwright1823ChatTest {
     static void setup() {
         playwright = Playwright.create();
         browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(false));
-        page = browser.newPage();
+        // 設定瀏覽器視窗大小為 1920x1280 (Set browser viewport to 1920x1280)
+        page = browser.newPage(new Browser.NewPageOptions().setViewportSize(1920, 1280));
+        // 自動將 Chromium 視窗移到螢幕中央 (Center Chromium window on screen)
+        try {
+            java.awt.Dimension screenSize = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+            int x = (screenSize.width - 1920) / 2;
+            int y = (screenSize.height - 1280) / 2;
+            String os = System.getProperty("os.name").toLowerCase();
+            if (os.contains("mac")) {
+                // macOS: AppleScript
+                String script = String.format(
+                    "osascript -e 'tell application \"Google Chrome\" to set the bounds of the first window to {%d, %d, %d, %d}'",
+                    x, y, x + 1920, y + 1280
+                );
+                Runtime.getRuntime().exec(script);
+            } else if (os.contains("win")) {
+                // Windows: PowerShell
+                String ps = String.format(
+                    "$hwnd = (Get-Process chrome | Where-Object {{$_.MainWindowTitle}} | Select-Object -First 1).MainWindowHandle; " +
+                    "Add-Type -TypeDefinition '[DllImport(\"user32.dll\")]public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);' -Name Win32 -Namespace Native; " +
+                    "[Native.Win32]::MoveWindow($hwnd, %d, %d, %d, %d, $true);",
+                    x, y, 1920, 1280
+                );
+                String[] cmd = {"powershell", "-Command", ps};
+                Runtime.getRuntime().exec(cmd);
+            }
+        } catch (Exception e) {
+            System.out.println("[警告] 無法自動置中 Chromium 視窗: " + e.getMessage());
+        }
     }
 
     @AfterAll
@@ -66,6 +94,7 @@ public class Playwright1823ChatTest {
             boolean gotReply = false;
             for (int t = 0; t < 10; t++) { // 10 * 500ms = 5s
                 Thread.sleep(500);
+                
                 int afterCount = responses.count();
                 if (afterCount > beforeCount) {
                     String reply = responses.nth(afterCount - 1).textContent();

@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class ComplaintSeleniumJsonTest {
+public class ComplaintSeleniumJSONAutoUploadTest {
     private WebDriver driver;
     private WebDriverWait wait;
     private JsonNode complaintData;
@@ -62,6 +62,7 @@ public class ComplaintSeleniumJsonTest {
         complaintBtn.click();
 
         // Step 3: Strictly select complaint category based on JSON 'category' field
+        // Define the 12 valid categories (must match the <img alt="..."> on the page)
         List<String> validCategories = Arrays.asList(
             "Clean-up of Refuses or Streets",
             "Water Dripping outside Building Units",
@@ -78,15 +79,17 @@ public class ComplaintSeleniumJsonTest {
         );
         // Read category from JSON
         String category = complaintData.has("category") ? complaintData.get("category").asText() : "";
+        // Validate category strictly
         if (!validCategories.contains(category)) {
             throw new RuntimeException("JSON 'category' field must be one of the 12 valid categories, but got: " + category);
         }
-        // Wait for all category options to be present
-        List<WebElement> categoryOptions = wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath("//a[contains(@class,'option')]//img")));
+        // Find all category options on the page
+        List<WebElement> categoryOptions = driver.findElements(By.xpath("//a[contains(@class,'option')]//img"));
         boolean found = false;
         for (WebElement img : categoryOptions) {
             String altText = img.getAttribute("alt").trim();
             if (altText.equals(category)) {
+                // Click the corresponding <a> element
                 WebElement aTag = img.findElement(By.xpath("./ancestor::a[1]"));
                 aTag.click();
                 found = true;
@@ -132,58 +135,96 @@ public class ComplaintSeleniumJsonTest {
         );
         firstSuggestion.click();
 
-        // Step 9: Manual file upload step (for demo video)
-        System.out.println("[INFO] Please upload the file manually at this point in the demo video.");
+        // Step 9: Auto upload files using Selenium sendKeys method (support multiple files)
+        // 注意：input[type='file'] 必須是可見且未被JS覆蓋，否則sendKeys會失敗
+        String filePath1 = System.getProperty("user.dir") + "/test_uploads/robin/fu_yip_street_flood_image.jpg";
+        String filePath2 = System.getProperty("user.dir") + "/test_uploads/robin/fu_yip_street_flood_video.mp4";
         try {
-            Thread.sleep(20000); // 20 seconds for manual upload
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            WebElement fileInput = driver.findElement(By.xpath("//input[contains(@id,'fileupload') and @type='file']"));
+            // 嘗試多檔案上傳（若input有multiple屬性）
+            fileInput.sendKeys(filePath1 + "\n" + filePath2);
+            Thread.sleep(2000); // 等待上傳
+        } catch (Exception e) {
+            System.out.println("[警告] sendKeys自動上傳失敗，請檢查input[type='file']是否可見或考慮Robot/JavascriptExecutor方法。");
         }
 
-        // Step 10: Click the 'Next' button to proceed to the next page (multi-language compatible)
+        // Step 10: Auto slow scroll down on upload page for recording
+        try {
+            long scrollHeight = (Long)((JavascriptExecutor)driver).executeScript("return document.body.scrollHeight");
+            for (int y = 0; y < scrollHeight; y += 100) {
+                ((JavascriptExecutor)driver).executeScript("window.scrollTo(0, arguments[0]);", y);
+                Thread.sleep(100); // 每100px
+            }
+        } catch (Exception e) {
+            System.out.println("[警告] scroll down 失敗: " + e.getMessage());
+        }
+
+        // Step 11: Click the 'Next' button to proceed to the next page (multi-language compatible)
         WebElement nextButton = wait.until(ExpectedConditions.elementToBeClickable(
             By.xpath("//button[normalize-space()='下一步' or normalize-space()='Next' or normalize-space()='下一步']")
         ));
         nextButton.click();
 
         // ================== Section C: Fill in personal information ==================
-        // Step 11: Agree to provide contact information (multi-language)
+        // Step 12: Agree to provide contact information (multi-language)
         WebElement agreeContactYes = wait.until(ExpectedConditions.elementToBeClickable(
             By.xpath("//label[@for='agree_1823_1']//span[contains(text(),'Yes') or contains(text(),'同意')]")
         ));
         agreeContactYes.click();
 
-        // Step 12: Agree to disclose personal data (multi-language)
+        // Step 13: Agree to disclose personal data (multi-language)
         WebElement agreeDiscloseYes = wait.until(ExpectedConditions.elementToBeClickable(
             By.xpath("//label[@for='agree_1']//span[contains(text(),'同意') or contains(text(),'Yes')]")
         ));
         agreeDiscloseYes.click();
 
-        // Step 13: Fill in Name, Email, Phone
+        // Step 14: Fill in Name, Email, Phone
         driver.findElement(By.xpath("//input[@id='name']")).sendKeys(complaintData.has("name") ? complaintData.get("name").asText() : "Robin");
         driver.findElement(By.xpath("//input[@id='email']")).sendKeys(complaintData.has("email") ? complaintData.get("email").asText() : "robintesting@gmail.com");
         driver.findElement(By.xpath("//input[@id='phone']")).sendKeys(complaintData.has("phone") ? complaintData.get("phone").asText() : "66886868");
 
-        // Step 14: Select best time to call (multi-language)
+        // Step 15: Select best time to call (multi-language)
         WebElement bestTime = wait.until(ExpectedConditions.elementToBeClickable(
             By.xpath("//span[contains(text(),'約下午6:00 - 晚上10:00') or contains(text(),'approximately 6:00 PM - 10:00 PM') or contains(text(),'约下午6:00 - 晚上10:00')]")
         ));
         bestTime.click();
 
-        // Step 15: Department needs to provide a reply (multi-language)
+        // Step 16: Department needs to provide a reply (multi-language)
         WebElement needReplyYes = wait.until(ExpectedConditions.elementToBeClickable(
             By.xpath("//label[@for='need_1']//span[contains(text(),'Yes') or contains(text(),'需要')] | //label[@for='need_1']")
         ));
         needReplyYes.click();
 
-        // Step 16: Click the 'Next' button (multi-language)
+        // Step 17: Click the 'Next' button (multi-language)
         nextButton = wait.until(ExpectedConditions.elementToBeClickable(
             By.xpath("//button[normalize-space()='Next' or contains(text(),'下一步')]")
         ));
         nextButton.click();
 
         // ================== Section D: Confirmation page assertions ==================
-        // Step 17: Assert confirmation page info matches expected values
+        // Step 18: Auto slow scroll down on confirmation page and check info step by step
+        try {
+            long scrollHeight = (Long)((JavascriptExecutor)driver).executeScript("return document.body.scrollHeight");
+            for (int y = 0; y < scrollHeight; y += 100) {
+                ((JavascriptExecutor)driver).executeScript("window.scrollTo(0, arguments[0]);", y);
+                Thread.sleep(100); // 每100px停0.1秒
+            }
+        } catch (Exception e) {
+            System.out.println("[警告] scroll down 失敗: " + e.getMessage());
+        }
+
+        // Step 19: Detect CAPTCHA and pause for manual input
+        try {
+            if (driver.findElements(By.xpath("//input[contains(@id,'captcha') or contains(@name,'captcha') or contains(@placeholder,'驗證碼') or contains(@placeholder,'CAPTCHA')]"))
+                    .size() > 0) {
+                System.out.println("偵測到驗證碼，請手動輸入後於console按Enter繼續...\nCAPTCHA detected, please input manually and press Enter in console to continue...");
+                System.in.read(); // 等待人工操作
+            }
+        } catch (Exception e) {
+            System.out.println("[警告] 驗證碼暫停流程發生錯誤: " + e.getMessage());
+        }
+
+        // Step 20: Assert confirmation page info matches expected values
         Map<String, String> expectedInfo = new HashMap<>();
         expectedInfo.put("Subject of Service Request/Complaint", "Other Complaints");
         expectedInfo.put("Have you submitted a case to 1823 regarding the same topic?", "No");
@@ -219,4 +260,4 @@ public class ComplaintSeleniumJsonTest {
 } 
 
 
-// Tests run successfully. Last updated: 2025-07-22 14:35:00 by Robin
+// Tests run successfully. Last updated: 2025-07-25 14:35:00 by Robin 
