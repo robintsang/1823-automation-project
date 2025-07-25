@@ -40,7 +40,7 @@ public class My1823SuggestTests {
         System.setProperty("webdriver.chrome.driver", driverPath);
         driver = new ChromeDriver();
         driver.manage().window().maximize();
-        wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        wait = new WebDriverWait(driver, Duration.ofSeconds(20));
     }
 
     @AfterEach
@@ -77,7 +77,7 @@ public class My1823SuggestTests {
         click(By.xpath("//button[contains(text(),'下一步')]"));
         scrollToBottom();
         click(By.xpath("//button[contains(text(),'遞交')]"));
-
+        wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//p[contains(text(),'表格已成功遞交')]")));
         takeScreenshot("screenshot.png");
     }
 
