@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CSV 筛选工具</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; margin: 2rem; line-height: 1.5; }
+    h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+    fieldset { border: 1px solid #8884; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+    legend { padding: 0 .5rem; }
+    label { display: block; margin: .5rem 0 .25rem; }
+    input[type="file"], input[type="date"], select, button { padding: .5rem; font: inherit; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .actions { display: flex; gap: .75rem; margin-top: 1rem; }
+    .muted { opacity: .8; font-size: .9rem; }
+    .status { margin-top: .75rem; font-size: .95rem; }
+    .error { color: #b00020; }
+    .success { color: #0a7f2e; }
+    table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+    th, td { border: 1px solid #8884; padding: .4rem .5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14rem; }
+    .preview { max-height: 280px; overflow: auto; }
+  </style>
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="将 CSV 中指定条件（日期/分数/数量/单价/烹饪方式）数据筛选并导出。">
+</head>
+<body>
+  <h1>CSV 筛选工具</h1>
+
+  <fieldset>
+    <legend>上传与日期</legend>
+    <label for="fileInput">选择 CSV 文件</label>
+    <input id="fileInput" type="file" accept=".csv,text/csv">
+    <div class="row">
+      <div>
+        <label for="dateInput">指定日期（留空则使用今日）</label>
+        <input id="dateInput" type="date">
+      </div>
+      <div>
+        <label for="delimiter">分隔符</label>
+        <select id="delimiter">
+          <option value=",">逗号 ,</option>
+          <option value=";">分号 ;</option>
+          <option value="\t">制表符 \t</option>
+        </select>
+      </div>
+    </div>
+    <p class="muted">提示：第一行需为表头。默认按以下列名识别：日期、分数、数量、单价、烹饪方式。若不同，请在下方映射。</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>列名映射（可选）</legend>
+    <div class="row">
+      <div>
+        <label for="colDate">日期列</label>
+        <select id="colDate"></select>
+      </div>
+      <div>
+        <label for="colScore">分数列</label>
+        <select id="colScore"></select>
+      </div>
+      <div>
+        <label for="colQuantity">数量列</label>
+        <select id="colQuantity"></select>
+      </div>
+      <div>
+        <label for="colPrice">单价列</label>
+        <select id="colPrice"></select>
+      </div>
+      <div>
+        <label for="colMethod">烹饪方式列</label>
+        <select id="colMethod"></select>
+      </div>
+    </div>
+    <p class="muted">若不选择，将尝试自动匹配列名：日期/分数/数量/单价/烹饪方式。</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>筛选条件</legend>
+    <ul>
+      <li>日期 = 指定日期（或今日）</li>
+      <li>分数 < 70</li>
+      <li>数量 = 200</li>
+      <li>单价 = 10（元）</li>
+      <li>烹饪方式 = 西餐</li>
+    </ul>
+  </fieldset>
+
+  <div class="actions">
+    <button id="previewBtn" disabled>预览前 20 行</button>
+    <button id="generateBtn" disabled>生成结果 CSV</button>
+  </div>
+  <div id="status" class="status"></div>
+
+  <div class="preview" id="preview"></div>
+
+  <script src="./script.js"></script>
+</body>
+</html>
+
