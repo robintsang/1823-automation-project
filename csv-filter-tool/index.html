@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>CSV 数据筛选与导出</title>
+	<style>
+		body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; margin: 24px; line-height: 1.6; }
+		h1 { font-size: 20px; margin: 0 0 16px; }
+		.controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+		label { font-weight: 600; }
+		input[type="file"], input[type="date"], button { padding: 8px 12px; font-size: 14px; }
+		button { cursor: pointer; }
+		.note { color: #555; font-size: 13px; }
+		.table-wrap { max-height: 40vh; overflow: auto; border: 1px solid #ddd; margin-top: 12px; }
+		table { border-collapse: collapse; width: 100%; font-size: 13px; }
+		th, td { border: 1px solid #eee; padding: 6px 8px; white-space: nowrap; }
+		th { background: #fafafa; position: sticky; top: 0; z-index: 1; }
+		.status { margin-top: 10px; font-size: 13px; color: #333; }
+		.badge { display: inline-block; padding: 2px 8px; background: #eef; border: 1px solid #cce; border-radius: 12px; font-size: 12px; }
+		footer { margin-top: 20px; font-size: 12px; color: #666; }
+	</style>
+</head>
+<body>
+	<h1>CSV 数据筛选与导出</h1>
+	<div class="controls">
+		<label>
+			上传文件：
+			<input id="fileInput" type="file" accept=".csv" />
+		</label>
+		<label>
+			筛选日期：
+			<input id="dateInput" type="date" />
+		</label>
+		<button id="generateBtn" disabled>生成</button>
+		<span class="badge" id="counts">未加载</span>
+	</div>
+	<div class="note">说明：若未选择日期，将按“今日”筛选。条件：分数 &lt; 70，数量 = 200，单价 = 10（元），烹饪方式 = “西餐”。</div>
+
+	<div class="table-wrap" id="previewWrap" style="display:none;">
+		<table id="previewTable"></table>
+	</div>
+
+	<div class="status" id="status"></div>
+
+	<footer>
+		本工具完全在本地浏览器中运行，不会上传数据。
+	</footer>
+
+	<script>
+	(function() {
+		/** @type {Array<object>} */
+		let parsedRows = [];
+		/** @type {string[]} */
+		let headers = [];
+
+		const fileInput = document.getElementById('fileInput');
+		const dateInput = document.getElementById('dateInput');
+		const generateBtn = document.getElementById('generateBtn');
+		const countsEl = document.getElementById('counts');
+		const statusEl = document.getElementById('status');
+		const previewWrap = document.getElementById('previewWrap');
+		const previewTable = document.getElementById('previewTable');
+
+		function setStatus(message) {
+			statusEl.textContent = message || '';
+		}
+
+		function yyyymmdd(date) {
+			const y = date.getFullYear();
+			const m = String(date.getMonth() + 1).padStart(2, '0');
+			const d = String(date.getDate()).padStart(2, '0');
+			return `${y}-${m}-${d}`; // normalized yyyy-mm-dd for comparison
+		}
+
+		function timestampName() {
+			const now = new Date();
+			const y = now.getFullYear();
+			const m = String(now.getMonth() + 1).padStart(2, '0');
+			const d = String(now.getDate()).padStart(2, '0');
+			const hh = String(now.getHours()).padStart(2, '0');
+			const mm = String(now.getMinutes()).padStart(2, '0');
+			const ss = String(now.getSeconds()).padStart(2, '0');
+			return `${y}${m}${d}${hh}${mm}${ss}_result.csv`;
+		}
+
+		function parseCSV(text) {
+			// Simple CSV parser supporting quoted fields with commas and newlines
+			const rows = [];
+			let current = '';
+			let row = [];
+			let inQuotes = false;
+			for (let i = 0; i < text.length; i++) {
+				const char = text[i];
+				if (inQuotes) {
+					if (char === '"') {
+						if (text[i + 1] === '"') { // escaped quote
+							current += '"';
+							i++;
+						} else {
+							inQuotes = false;
+						}
+					} else {
+						current += char;
+					}
+				} else {
+					if (char === '"') {
+						inQuotes = true;
+					} else if (char === ',') {
+						row.push(current);
+						current = '';
+					} else if (char === '\n') {
+						row.push(current);
+						rows.push(row);
+						row = [];
+						current = '';
+					} else if (char === '\r') {
+						// ignore CR; handle CRLF
+					} else {
+						current += char;
+					}
+				}
+			}
+			// push last field
+			row.push(current);
+			rows.push(row);
+			return rows;
+		}
+
+		function renderPreview(rows, headerList) {
+			if (!rows || rows.length === 0) {
+				previewWrap.style.display = 'none';
+				previewTable.innerHTML = '';
+				return;
+			}
+			previewWrap.style.display = 'block';
+			let html = '<thead><tr>' + headerList.map(h => `<th>${escapeHtml(h)}</th>`).join('') + '</tr></thead>';
+			html += '<tbody>' + rows.map(r => '<tr>' + headerList.map(h => `<td>${escapeHtml(r[h] ?? '')}</td>`).join('') + '</tr>').join('') + '</tbody>';
+			previewTable.innerHTML = html;
+		}
+
+		function escapeHtml(v) {
+			return String(v)
+				.replaceAll('&', '&amp;')
+				.replaceAll('<', '&lt;')
+				.replaceAll('>', '&gt;')
+				.replaceAll('"', '&quot;')
+				.replaceAll("'", '&#039;');
+		}
+
+		function detectHeaderNames(list) {
+			// attempt to map user headers to required logical fields
+			const lower = list.map(h => (h || '').toString().trim());
+			const idx = {
+				date: findIndexByAliases(lower, ['日期','date','检测日期','时间','time','采集日期']),
+				score: findIndexByAliases(lower, ['分数','score','检测分数','得分']),
+				quantity: findIndexByAliases(lower, ['数量','quantity','数值','数量值']),
+				unitPrice: findIndexByAliases(lower, ['单价','价格','price','unit price','单价(元)','单价（元）']),
+				method: findIndexByAliases(lower, ['烹饪方式','方式','method','菜系','料理','类别'])
+			};
+			return idx;
+		}
+
+		function findIndexByAliases(headerList, aliases) {
+			for (let i = 0; i < headerList.length; i++) {
+				const h = headerList[i].toLowerCase();
+				for (const a of aliases) {
+					if (h === a.toLowerCase()) return i;
+				}
+			}
+			return -1;
+		}
+
+		function normalizeDateString(s) {
+			if (!s) return '';
+			const t = s.toString().trim();
+			// Try ISO or common forms: yyyy-mm-dd, yyyy/mm/dd, yyyy.mm.dd
+			const m = t.match(/(\d{4})[\-/\.](\d{1,2})[\-/\.]?(\d{1,2})?/);
+			if (m) {
+				const y = Number(m[1]);
+				const mo = String(Number(m[2])).padStart(2, '0');
+				const d = String(Number(m[3] || '1')).padStart(2, '0');
+				return `${y}-${mo}-${d}`;
+			}
+			// Try yyyymmdd
+			const m2 = t.match(/^(\d{4})(\d{2})(\d{2})$/);
+			if (m2) {
+				return `${m2[1]}-${m2[2]}-${m2[3]}`;
+			}
+			// Fallback: Date.parse
+			const d2 = new Date(t);
+			if (!isNaN(d2.getTime())) return yyyymmdd(d2);
+			return t;
+		}
+
+		function toNumber(v) {
+			if (v === null || v === undefined) return NaN;
+			const s = String(v).toString().trim().replace(/[,\s]/g, '');
+			// remove currency symbols like 元, ￥, CNY
+			const s2 = s.replace(/[元￥¥]/g, '');
+			const n = Number(s2);
+			return Number.isFinite(n) ? n : NaN;
+		}
+
+		function filterRows(rows, headerList) {
+			const mapping = detectHeaderNames(headerList);
+			if (Object.values(mapping).some(i => i < 0)) {
+				setStatus('提示：未能识别部分列名，请确认表头包含 日期/分数/数量/单价/烹饪方式。');
+			}
+			const chosenDate = dateInput.value ? new Date(dateInput.value) : new Date();
+			const targetDate = yyyymmdd(chosenDate);
+
+			const out = [];
+			for (const r of rows) {
+				const dateStr = normalizeDateString(r[mapping.date] ?? '');
+				const score = toNumber(r[mapping.score]);
+				const quantity = toNumber(r[mapping.quantity]);
+				const unitPrice = toNumber(r[mapping.unitPrice]);
+				const method = (r[mapping.method] ?? '').toString().trim();
+
+				if (dateStr === targetDate && score < 70 && quantity === 200 && unitPrice === 10 && method === '西餐') {
+					out.push(r);
+				}
+			}
+			return { rows: out, mapping };
+		}
+
+		function arrayRowsToObjects(rows, headerList) {
+			return rows.map(r => {
+				const obj = {};
+				for (let i = 0; i < headerList.length; i++) obj[headerList[i]] = r[i] ?? '';
+				return obj;
+			});
+		}
+
+		function objectsToCSV(rows, headerList) {
+			const escapeField = (v) => {
+				const s = v == null ? '' : String(v);
+				if (/[",\n\r]/.test(s)) return '"' + s.replaceAll('"', '""') + '"';
+				return s;
+			};
+			const head = headerList.map(escapeField).join(',');
+			const body = rows.map(r => headerList.map(h => escapeField(r[h])).join(',')).join('\n');
+			return head + '\n' + body + '\n';
+		}
+
+		function downloadCSV(content, filename) {
+			const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+		}
+
+		fileInput.addEventListener('change', async () => {
+			setStatus('正在读取文件...');
+			parsedRows = [];
+			headers = [];
+			previewTable.innerHTML = '';
+			previewWrap.style.display = 'none';
+			generateBtn.disabled = true;
+			countsEl.textContent = '未加载';
+
+			const file = fileInput.files && fileInput.files[0];
+			if (!file) { setStatus(''); return; }
+			try {
+				const text = await file.text();
+				const matrix = parseCSV(text).filter(r => r.length && !(r.length === 1 && r[0] === ''));
+				if (matrix.length === 0) { setStatus('文件为空'); return; }
+				headers = matrix[0].map(h => (h || '').toString().trim());
+				const dataRows = matrix.slice(1);
+				parsedRows = dataRows;
+				countsEl.textContent = `总行数：${dataRows.length}`;
+				generateBtn.disabled = false;
+				setStatus('文件已加载，可点击“生成”。');
+				// preview first 100 rows as objects
+				const previewObjs = arrayRowsToObjects(dataRows.slice(0, 100), headers);
+				renderPreview(previewObjs, headers);
+			} catch (e) {
+				console.error(e);
+				setStatus('读取失败：' + (e && e.message ? e.message : '未知错误'));
+			}
+		});
+
+		generateBtn.addEventListener('click', () => {
+			if (!parsedRows.length) { setStatus('请先上传 CSV 文件'); return; }
+			setStatus('正在筛选...');
+			const { rows } = filterRows(parsedRows, headers);
+			const objects = rows.map(r => {
+				const obj = {};
+				for (let i = 0; i < headers.length; i++) obj[headers[i]] = r[i] ?? '';
+				return obj;
+			});
+			const csv = objectsToCSV(objects, headers);
+			downloadCSV(csv, timestampName());
+			countsEl.textContent = `筛选结果：${objects.length} 行`;
+			setStatus('已生成。');
+			// update preview to show filtered
+			renderPreview(objects.slice(0, 200), headers);
+		});
+
+		// default date = today
+		dateInput.valueAsDate = new Date();
+	})();
+	</script>
+</body>
+</html>
+
